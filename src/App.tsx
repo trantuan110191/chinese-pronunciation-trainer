@@ -2422,6 +2422,10 @@ function App() {
         </header>
 
         <section className="course-path" aria-label="Lộ trình bài học">
+          <div className="course-path-title">
+            <strong>Lesson Progress</strong>
+            <span>Current Unit</span>
+          </div>
           {decks.map((deck, index) => {
             const deckStats = fullDeckStats(stats, deck.id)
             const completed = deckStats.attempts >= deck.items.length
