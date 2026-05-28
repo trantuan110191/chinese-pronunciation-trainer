@@ -1139,15 +1139,15 @@ const decks: Deck[] = [
           tip: 'chōu bật hơi; zhòu không bật hơi.',
         },
         {
-          focus: 'zhuā / chuā / shuǎ / ruǎn',
+          focus: 'zhuā / chuāng / shuǎ / ruǎn',
           target: 0,
           choices: [
             { hanzi: '抓', pinyin: 'zhuā', meaning: 'bắt / nắm' },
-            { hanzi: '欻', pinyin: 'chuā', meaning: 'vụt / soạt' },
+            { hanzi: '窗', pinyin: 'chuāng', meaning: 'cửa sổ' },
             { hanzi: '耍', pinyin: 'shuǎ', meaning: 'chơi / giỡn' },
             { hanzi: '软', pinyin: 'ruǎn', meaning: 'mềm' },
           ],
-          tip: 'zhuā là zh + ua, không bật hơi như chuā.',
+          tip: 'zhuā bắt đầu bằng zh; chuāng bật hơi và có âm cuối ng.',
         },
         {
           focus: 'zhuī / chuí / shuǐ / ruì',
