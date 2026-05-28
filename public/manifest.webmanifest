@@ -1,0 +1,9 @@
+{
+  "name": "Luyen phat am tieng Trung",
+  "short_name": "Tieng Trung",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#eef2ec",
+  "theme_color": "#0e6b58",
+  "lang": "vi"
+}
