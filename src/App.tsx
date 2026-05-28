@@ -51,6 +51,12 @@ type DeckStats = {
   hearts: number
 }
 
+type LessonRun = {
+  deckId: string
+  exerciseIds: string[]
+  choiceOrders: Record<string, string[]>
+}
+
 type DrillRow = {
   focus: string
   target: 0 | 1 | 2 | 3
@@ -1930,9 +1936,38 @@ function recognitionErrorMessage(error?: string, message?: string) {
   return message || 'Không nhận được giọng nói. Thử lại ở nơi yên tĩnh hơn.'
 }
 
+function shuffleArray<T>(items: T[]) {
+  const shuffled = [...items]
+
+  for (let index = shuffled.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(Math.random() * (index + 1))
+    ;[shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]]
+  }
+
+  return shuffled
+}
+
+function choiceKey(choice: Choice) {
+  return `${choice.hanzi}::${choice.pinyin}`
+}
+
+function createLessonRun(deck: Deck): LessonRun {
+  return {
+    deckId: deck.id,
+    exerciseIds: shuffleArray(deck.items.map((item) => item.id)),
+    choiceOrders: Object.fromEntries(
+      deck.items.map((item) => [
+        item.id,
+        shuffleArray(item.choices.map((choice) => choiceKey(choice))),
+      ]),
+    ),
+  }
+}
+
 function App() {
   const [mode, setMode] = useState<AppMode>('listen')
   const [deckId, setDeckId] = useState(decks[0].id)
+  const [lessonRun, setLessonRun] = useState(() => createLessonRun(decks[0]))
   const [questionIndex, setQuestionIndex] = useState(0)
   const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null)
   const [answerStatus, setAnswerStatus] = useState<AnswerStatus>('idle')
@@ -1967,7 +2002,40 @@ function App() {
     () => decks.find((deck) => deck.id === deckId) ?? decks[0],
     [deckId],
   )
-  const currentExercise = currentDeck.items[questionIndex % currentDeck.items.length]
+  const orderedExercises = useMemo(() => {
+    const exerciseMap = new Map(currentDeck.items.map((item) => [item.id, item]))
+    const exerciseIds =
+      lessonRun.deckId === currentDeck.id
+        ? lessonRun.exerciseIds
+        : currentDeck.items.map((item) => item.id)
+    const ordered = exerciseIds
+      .map((id) => exerciseMap.get(id))
+      .filter((item): item is Exercise => Boolean(item))
+
+    return ordered.length === currentDeck.items.length ? ordered : currentDeck.items
+  }, [currentDeck, lessonRun])
+  const currentExercise = orderedExercises[questionIndex % orderedExercises.length]
+  const currentChoices = useMemo(() => {
+    const choiceOrder =
+      lessonRun.deckId === currentDeck.id
+        ? lessonRun.choiceOrders[currentExercise.id]
+        : undefined
+
+    if (!choiceOrder) {
+      return currentExercise.choices
+    }
+
+    const choiceMap = new Map(
+      currentExercise.choices.map((choice) => [choiceKey(choice), choice]),
+    )
+    const ordered = choiceOrder
+      .map((key) => choiceMap.get(key))
+      .filter((choice): choice is Choice => Boolean(choice))
+
+    return ordered.length === currentExercise.choices.length
+      ? ordered
+      : currentExercise.choices
+  }, [currentDeck.id, currentExercise, lessonRun])
   const currentStats = fullDeckStats(stats, currentDeck.id)
   const globalStats = decks.reduce(
     (total, deck) => {
@@ -1981,13 +2049,13 @@ function App() {
     },
     { xp: 0, correct: 0, attempts: 0, bestStreak: 0 },
   )
-  const lessonProgress = ((questionIndex + (answerStatus === 'idle' ? 0 : 1)) / currentDeck.items.length) * 100
+  const lessonProgress = ((questionIndex + (answerStatus === 'idle' ? 0 : 1)) / orderedExercises.length) * 100
   const sessionAccuracy =
     sessionAnswered === 0 ? 0 : Math.round((sessionCorrect / sessionAnswered) * 100)
   const recognitionConstructor = getRecognitionConstructor()
   const supportsRecognition = Boolean(recognitionConstructor)
   const isSecure = typeof window === 'undefined' ? true : window.isSecureContext
-  const isLastQuestion = questionIndex === currentDeck.items.length - 1
+  const isLastQuestion = questionIndex === orderedExercises.length - 1
 
   const chineseVoices = useMemo(() => {
     return [...voices]
@@ -2097,6 +2165,7 @@ function App() {
   }
 
   function resetLessonSession() {
+    setLessonRun(createLessonRun(currentDeck))
     setQuestionIndex(0)
     setSessionCorrect(0)
     setSessionAnswered(0)
@@ -2179,7 +2248,10 @@ function App() {
   }
 
   function changeDeck(nextDeckId: string) {
-    setDeckId(nextDeckId)
+    const nextDeck = decks.find((deck) => deck.id === nextDeckId) ?? decks[0]
+
+    setDeckId(nextDeck.id)
+    setLessonRun(createLessonRun(nextDeck))
     setQuestionIndex(0)
     setSessionCorrect(0)
     setSessionAnswered(0)
@@ -2249,7 +2321,7 @@ function App() {
     }
 
     const nextIndex = questionIndex + 1
-    const nextExercise = currentDeck.items[nextIndex]
+    const nextExercise = orderedExercises[nextIndex]
     resetCurrentPrompt()
     setQuestionIndex(nextIndex)
     playChoiceAudio(nextExercise.target, speed, 'Đang phát âm mẫu câu mới.')
@@ -2534,7 +2606,7 @@ function App() {
             </div>
 
             <div className="choice-grid">
-              {currentExercise.choices.map((choice) => {
+              {currentChoices.map((choice) => {
                 const isTarget = choice.hanzi === currentExercise.target.hanzi
                 const isSelected = selectedAnswer === choice.hanzi
                 const className =
@@ -2567,7 +2639,7 @@ function App() {
               {answerStatus === 'idle' ? (
                 <>
                   <strong>Trọng tâm: {currentExercise.focus}</strong>
-                  <span>Câu {questionIndex + 1}/{currentDeck.items.length}. Bấm nghe trước khi chọn.</span>
+                  <span>Câu {questionIndex + 1}/{orderedExercises.length}. Bấm nghe trước khi chọn.</span>
                 </>
               ) : (
                 <>
